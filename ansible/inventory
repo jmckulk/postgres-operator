@@ -36,6 +36,7 @@ crunchy_debug='false'
 # the pgo-installer image to install the operator
 # ==================
 # kubernetes_in_cluster=false
+# use_oc=false
 
 # Create RBAC
 # ==================

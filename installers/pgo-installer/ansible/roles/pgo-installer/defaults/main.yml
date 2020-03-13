@@ -1,0 +1,6 @@
+---
+pgo_installer_namespace: "pgo-install"
+pgo_install_sa: "pgo-installer-sa"
+pgo_install_crb: "pgo-installer-crb"
+job_wait_timeout: 180s
+installer_img_pull_policy: "IfNotPresent"

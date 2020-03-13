@@ -1,0 +1,12 @@
+---
+- name: Cleanup Deployer
+  tags:
+    - always
+  block:
+    - name: Delete Install Namespace
+      shell: "kubectl delete namespace {{ pgo_installer_namespace }}"
+      ignore_errors: yes
+
+    - name: Delete Installer Cluster Role
+      shell: "kubectl delete clusterrolebinding {{ pgo_install_crb }}"
+      ignore_errors: yes

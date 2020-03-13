@@ -1,0 +1,108 @@
+---
+- name: Set output directory fact
+  set_fact:
+    output_dir: "{{ ansible_env.HOME }}/.pgo/{{ pgo_operator_namespace }}/output"
+  tags: 
+    - always
+
+- name: Ensure output directory exists
+  file:
+    path: "{{ output_dir }}"
+    state: directory
+    mode: 0700
+  tags:
+    - always
+
+- include_vars: openshift.yml
+  when: use_oc | default(false) | bool
+  tags:
+    - always
+
+- name: Use kubectl or oc
+  set_fact:
+    kubectl_or_oc: "{{ openshift_oc_bin if openshift_oc_bin is defined else 'kubectl' }}"
+  tags:
+    - always
+
+- name: Setup Install Container
+  tags:
+    - always
+  block:
+  - name: Create Install Namespace
+    shell: "{{ kubectl_or_oc }} create namespace {{ pgo_installer_namespace }}"
+    ignore_errors: yes
+      
+  - name: Create PGO-Install Service Account
+    shell: "{{ kubectl_or_oc }} create serviceaccount {{ pgo_install_sa }} -n {{ pgo_installer_namespace }}"
+    ignore_errors: yes
+
+  - name: Create PGO-Installer Cluster Role Binding
+    shell: "{{ kubectl_or_oc }} create clusterrolebinding {{ pgo_install_crb }} -n {{ pgo_installer_namespace }} --clusterrole=cluster-admin --serviceaccount={{ pgo_installer_namespace }}:{{ pgo_install_sa }}"
+    ignore_errors: yes
+
+  - name: Create Inventory Config Map
+    shell: "{{ kubectl_or_oc }} create configmap pgo-install-inventory -n {{ pgo_installer_namespace }} --from-file=inventory={{ inventory_dir }}/inventory"
+    ignore_errors: yes
+
+- name: Run Install Job
+  tags:
+    - install-container
+  block:
+    - name: Template Install Job Json
+      template:
+        src: pgo-installer-job.json.j2
+        dest: "{{ output_dir }}/pgo-installer-job.json"
+        mode: '0600'
+    - name: Create Install Job
+      shell: "{{ kubectl_or_oc }} create -n {{ pgo_installer_namespace }} -f {{ output_dir }}/pgo-installer-job.json"
+      register: job_started
+    - name: Wait for Install Job
+      when: job_started != 0
+      shell: "{{ kubectl_or_oc }} wait -n {{ pgo_installer_namespace }} --timeout={{ job_wait_timeout }} --for=condition=Complete jobs.batch/pgo-installer"
+  rescue: 
+    - debug:
+        msg: Install failed
+  always:
+    - include_tasks: cleanup.yml
+
+- name: Run Uninstall Job
+  tags:
+    - uninstall-container
+  block:
+    - name: Template Uninstall Job Json
+      template:
+        src: pgo-uninstaller-job.json.j2
+        dest: "{{ output_dir }}/pgo-uninstaller-job.json"
+        mode: '0600'
+    - name: Create Uninstall Job
+      shell: "{{ kubectl_or_oc }} create -n {{ pgo_installer_namespace }} -f {{ output_dir }}/pgo-uninstaller-job.json"
+      register: job_started
+    - name: Wait for Uninstall Job
+      when: job_started != 0
+      shell: "{{ kubectl_or_oc }} wait -n {{ pgo_installer_namespace }} --timeout={{ job_wait_timeout }} --for=condition=Complete jobs.batch/pgo-uninstaller"
+  rescue:
+    - debug:
+        msg: Uninstall failed
+  always:
+    - include_tasks: cleanup.yml
+
+- name: Run Update Job
+  tags:
+    - update-container
+  block:
+    - name: Template Update Job Json
+      template:
+        src: pgo-update-job.json.j2
+        dest: "{{ output_dir }}/pgo-update-job.json"
+        mode: '0600'
+    - name: Create Update Job
+      shell: "{{ kubectl_or_oc }} create -n {{ pgo_installer_namespace }} -f {{ output_dir }}/pgo-update-job.json"
+      register: job_started
+    - name: Wait for Update Job
+      when: job_started != 0
+      shell: "{{ kubectl_or_oc }} wait -n {{ pgo_installer_namespace }} --timeout={{ job_wait_timeout }} --for=condition=Complete jobs.batch/pgo-updater"
+  rescue:
+    - debug:
+        msg: Update failed
+  always:
+    - include_tasks: cleanup.yml
