@@ -6,31 +6,20 @@ LABEL name="pgo-installer" \
     summary="Crunchy PostgreSQL Operator - Installer" \
     description="Crunchy PostgreSQL Operator - Installer"
 
+ADD installers/pgo-installer/config/kubernetes.repo /etc/yum.repos.d/kubernetes.repo
 
-# Kubernetes repository
-RUN echo $'[kubernetes] \n\
-name=Kubernetes \n\
-baseurl=https://packages.cloud.google.com/yum/repos/kubernetes-el7-x86_64 \n\
-enabled=1 \n\
-gpgcheck=1 \n\
-repo_gpgcheck=1 \n\
-gpgkey=https://packages.cloud.google.com/yum/doc/yum-key.gpg https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg' > /etc/yum.repos.d/kubernetes.repo
-
-RUN yum -y install epel-release
-
-# which is used in the ansible roles to verify
-# used to install ssk-keyen and gen ssh keys
 RUN yum -y install \
     --setopt=skip_missing_names_on_install=False \
+    epel-release \
     kubectl \
     ansible \ 
     which
 
-
 USER daemon
 
+ADD bin/oc /usr/bin/oc
 ADD ansible /ansible
 ADD installers/pgo-installer/bin/pgo-install.sh pgo-install.sh
 
+RUN chmod +x /usr/bin/oc
 RUN chmod +x pgo-install.sh
-
