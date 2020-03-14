@@ -49,13 +49,5 @@
   when: kubernetes_in_cluster | default(False) | bool
   tags: always
 
-- include_tasks: check_openshift.yml
-  when: openshift_host | default('') != ''
-  tags: always
-
-- include_tasks: check_kubernetes.yml
-  when: kubernetes_context | default('') != '' or kubernetes_in_cluster | default(False) | bool
-  tags: always
-
 - include_tasks: check_inventory.yml
   tags: always
