@@ -73,3 +73,14 @@ imagePullSecrets:
 - name: "{{ .Values.pgo_image_pull_secret }}"
 {{ end }}
 {{ end }}
+
+{{/*
+Create the template for clusterroleName based on values.yaml parameters
+*/}}
+{{- define "postgres-operator.clusterroleName" -}}
+{{- if .Values.rbac.useClusterAdmin -}}
+cluster-admin
+{{- else -}}
+{{ include "postgres-operator.fullname" . }}-cr
+{{- end }}
+{{- end }}

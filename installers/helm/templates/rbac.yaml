@@ -9,7 +9,7 @@ metadata:
 {{ include "postgres-operator.labels" . | indent 4 }}
 {{ include "postgres-operator.imagePullSecret" . }}
 {{ end }}
-{{ if .Values.rbac.create }}
+{{ if and .Values.rbac.create (not .Values.rbac.useClusterAdmin) }}
 ---
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
@@ -19,7 +19,7 @@ metadata:
 {{ include "postgres-operator.labels" . | indent 4 }}
   annotations:
     helm.sh/hook: post-install,post-upgrade,pre-delete
-    helm.sh/hook-delete-policy: hook-succeeded
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
     helm.sh/hook-weight: "-10"
 rules:
   - apiGroups:
@@ -123,6 +123,8 @@ rules:
     verbs:
       - delete
       - list
+{{ end }}
+{{ if .Values.rbac.create }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -132,12 +134,12 @@ metadata:
 {{ include "postgres-operator.labels" . | indent 4 }}
   annotations:
     helm.sh/hook: post-install,post-upgrade,pre-delete
-    helm.sh/hook-delete-policy: hook-succeeded
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
     helm.sh/hook-weight: "-10"
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: {{ template "postgres-operator.fullname" . }}-cr
+  name: {{ include "postgres-operator.clusterroleName" . }}
 subjects:
 - kind: ServiceAccount
   name: {{ include "postgres-operator.serviceAccountName" . }}

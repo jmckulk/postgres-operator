@@ -7,6 +7,8 @@ fullnameOverride: ""
 rbac:
     # rbac.create: if false rbac resources should be in place
     create: true
+    # rbac.useClusterAdmin: creates a ClusterRoleBinding giving cluster-admin to the ServiceAccount
+    useClusterAdmin: true
 
 serviceAccount:
     # serviceAccount.create: Whether to create a service account or not
