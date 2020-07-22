@@ -84,3 +84,11 @@ cluster-admin
 {{ include "postgres-operator.fullname" . }}-cr
 {{- end }}
 {{- end }}
+
+{{- define "postgres-operator.values" -}}
+values.yaml: |
+  ---
+  {{- range $index, $value := .Values }}
+    {{ $index }}: {{ $value | deepCopy }}
+  {{- end }}
+{{- end }}
