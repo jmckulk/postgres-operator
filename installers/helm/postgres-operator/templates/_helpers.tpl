@@ -88,7 +88,11 @@ cluster-admin
 {{- define "postgres-operator.values" -}}
 values.yaml: |
   ---
-  {{- range $index, $value := .Values }}
-    {{ $index }}: {{ $value | deepCopy }}
-  {{- end }}
+{{- template "postgres-operator.dive" .Values }}
+{{- end }}
+
+{{- define "postgres-operator.dive" -}}
+{{- range $index, $value := . }}
+{{ $index | indent 2 }}: {{ if kindIs "map" $value }}{{ template "postgres-operator.dive" $value }}{{ else }}{{ $value | quote }}{{ end }}
+{{- end }}
 {{- end }}
