@@ -22,3 +22,15 @@ func (k *KubeAPI) ListDeployments(namespace string, labels map[string]string) ([
 
 	return list.Items, err
 }
+
+// GetDeployment returns deployment by name, if exists.
+func (k *KubeAPI) GetDeployment(namespace, name string) (*apps_v1.Deployment, error) {
+	var options meta_v1.GetOptions
+
+	deployment, err := k.Client.AppsV1().Deployments(namespace).Get(name, options)
+	if deployment == nil && err != nil {
+		deployment = &apps_v1.Deployment{}
+	}
+
+	return deployment, err
+}
