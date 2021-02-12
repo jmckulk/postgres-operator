@@ -179,6 +179,7 @@ func requireClusterReady(t testing.TB, namespace, cluster string, timeout time.D
 				database = true
 			}
 		}
+		t.Log("Cluster Ready")
 		return database
 	}
 
@@ -210,6 +211,7 @@ func waitPgBouncerReady(t testing.TB, namespace, cluster string, timeout time.Du
 				return false
 			}
 		}
+		t.Log("Pgbouncer ready")
 		return true
 	}
 

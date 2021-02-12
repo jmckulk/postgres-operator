@@ -17,11 +17,13 @@ func (k *KubeAPI) CheckAnnotations(namespace, annotationKey, annotationValue str
 		fmt.Println(deployment.Spec.Template.ObjectMeta)
 		has = meta_v1.HasAnnotation(deployment.Spec.Template.ObjectMeta, annotationKey)
 		if !has {
+			fmt.Printf("%s doesn't have %s\n", name, annotationKey)
 			return false, nil
 		}
 
 		val := deployment.Spec.Template.ObjectMeta.Annotations[annotationKey]
 		if val != annotationValue {
+			// fmt.Println("expected: %s actual: %s", annotationValue, val)
 			return false, nil
 		}
 	}
