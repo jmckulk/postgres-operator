@@ -26,118 +26,222 @@ func TestClusterAnnotation(t *testing.T) {
 	t.Parallel()
 
 	withNamespace(t, func(namespace func() string) {
-		tests := []struct {
-			testName    string
-			annKey      string
-			annVal      string
-			annFlag     string
-			flags       []string
-			deployments []string
-		}{
-			{
-				testName:    "global",
-				annKey:      "global",
-				annVal:      "here",
-				annFlag:     "--annotation",
-				flags:       []string{"--pgbouncer"},
-				deployments: []string{"global", "global-backrest-shared-repo", "global-pgbouncer"},
-			}, {
-				testName:    "postgres",
-				annKey:      "postgres",
-				annVal:      "present",
-				annFlag:     "--annotation-postgres",
-				flags:       []string{},
-				deployments: []string{"postgres"},
-			}, {
-				testName:    "pgbackrest",
-				annKey:      "pgbackrest",
-				annVal:      "what",
-				annFlag:     "--annotation-pgbackrest",
-				flags:       []string{},
-				deployments: []string{"pgbackrest-backrest-shared-repo"},
-			}, {
-				testName:    "pgbouncer",
-				annKey:      "pgbouncer",
-				annVal:      "aqui",
-				annFlag:     "--annotation-pgbouncer",
-				flags:       []string{"--pgbouncer"},
-				deployments: []string{"pgbouncer-pgbouncer"},
-			},
-		}
-
 		t.Run("on create", func(t *testing.T) {
+			t.Parallel()
+			tests := []struct {
+				testName     string
+				annotations  map[string]string
+				clusterFlags []string
+				addFlags     []string
+				removeFlags  []string
+				deployments  []string
+			}{
+				{
+					testName: "create-global",
+					annotations: map[string]string{
+						"global":  "here",
+						"global2": "foo",
+					},
+					clusterFlags: []string{"--pgbouncer"},
+					addFlags:     []string{"--annotation=global=here", "--annotation=global2=foo"},
+					removeFlags:  []string{"--annotation=global-", "--annotation=global2-"},
+					deployments:  []string{"create-global", "create-global-backrest-shared-repo", "create-global-pgbouncer"},
+				}, {
+					testName: "create-postgres",
+					annotations: map[string]string{
+						"postgres": "present",
+					},
+					clusterFlags: []string{},
+					addFlags:     []string{"--annotation-postgres=postgres=present"},
+					removeFlags:  []string{"--annotation-postgres=postgres-"},
+					deployments:  []string{"create-postgres"},
+				}, {
+					testName: "create-pgbackrest",
+					annotations: map[string]string{
+						"pgbackrest": "what",
+					},
+					clusterFlags: []string{},
+					addFlags:     []string{"--annotation-pgbackrest=pgbackrest=what"},
+					removeFlags:  []string{"--annotation-pgbackrest=pgbackrest-"},
+					deployments:  []string{"create-pgbackrest-backrest-shared-repo"},
+				}, {
+					testName: "create-pgbouncer",
+					annotations: map[string]string{
+						"pgbouncer": "aqui",
+					},
+					clusterFlags: []string{"--pgbouncer"},
+					addFlags:     []string{"--annotation-pgbouncer=pgbouncer=aqui"},
+					removeFlags:  []string{"--annotation-pgbouncer=pgbouncer-"},
+					deployments:  []string{"create-pgbouncer-pgbouncer"},
+				},
+			}
+
 			for _, test := range tests {
-				// create cluster with flag
-				createCMD := []string{"create", "cluster", test.testName, "-n", namespace()}
-				createCMD = append(createCMD, test.annFlag+"="+test.annKey+"="+test.annVal)
-				createCMD = append(createCMD, test.flags...)
-				output, err := pgo(createCMD...).Exec(t)
-				defer teardownCluster(t, namespace(), test.testName, time.Now())
-				require.NoError(t, err)
-				require.Contains(t, output, "created cluster:")
-
-				// wait for cluster
-				requireClusterReady(t, namespace(), test.testName, (2 * time.Minute))
-				waitPgBouncerReady(t, namespace(), test.testName, time.Minute)
-
-				t.Run("add", func(t *testing.T) {
-					t.Run(test.testName, func(t *testing.T) {
-						// verify that annotation exists on deployments
-						exist, err := TestContext.Kubernetes.CheckAnnotations(namespace(), test.annKey, test.annVal, test.deployments)
-						require.NoError(t, err)
-						require.True(t, exist)
+				test := test // lock test variable in for each run since it changes across parallel loops
+				t.Run(test.testName, func(t *testing.T) {
+					t.Parallel()
+					// create cluster with flag
+					createCMD := []string{"create", "cluster", test.testName, "-n", namespace()}
+					createCMD = append(createCMD, test.clusterFlags...)
+					createCMD = append(createCMD, test.addFlags...)
+					output, err := pgo(createCMD...).Exec(t)
+					t.Cleanup(func() {
+						teardownCluster(t, namespace(), test.testName, time.Now())
 					})
-				})
-
-				t.Run("remove", func(t *testing.T) {
-					t.Skip("Bug? annotation in not removed on update")
-					updateCMD := []string{"update", "cluster", test.testName, "-n", namespace(), "--no-prompt"}
-					updateCMD = append(updateCMD, test.annFlag+"="+test.annKey+"-")
-					output, err := pgo(updateCMD...).Exec(t)
 					require.NoError(t, err)
-					require.Contains(t, output, "updated pgcluster")
+					require.Contains(t, output, "created cluster:")
 
 					// wait for cluster
 					requireClusterReady(t, namespace(), test.testName, (2 * time.Minute))
-					waitPgBouncerReady(t, namespace(), test.testName, time.Minute)
+					if contains(test.clusterFlags, "--pgbouncer") {
+						requirePgBouncerReady(t, namespace(), test.testName, (2 * time.Minute))
+					}
 
-					t.Run(test.testName, func(t *testing.T) {
-						// verify that annotations don't exist on deployments
-						exist, err := TestContext.Kubernetes.CheckAnnotations(namespace(), test.annKey, test.annVal, test.deployments)
+					t.Run("add", func(t *testing.T) {
+						for _, deploymentName := range test.deployments {
+							for expectedKey, expectedValue := range test.annotations {
+								hasAnnotation := func() bool {
+									actualAnnotations := TestContext.Kubernetes.GetDeployment(namespace(), deploymentName).Spec.Template.ObjectMeta.GetAnnotations()
+									actualValue := actualAnnotations[expectedKey]
+									if actualValue == expectedValue {
+										return true
+									}
+
+									return false
+								}
+
+								requireWaitFor(t, hasAnnotation, time.Minute, time.Second,
+									"timeout waiting for deployment \"%q\" to have annotation \"%s: %s\"", deploymentName, expectedKey, expectedValue)
+							}
+						}
+					})
+
+					t.Run("remove", func(t *testing.T) {
+						t.Skip("Bug: annotation in not removed on update")
+						updateCMD := []string{"update", "cluster", test.testName, "-n", namespace(), "--no-prompt"}
+						updateCMD = append(updateCMD, test.removeFlags...)
+						output, err := pgo(updateCMD...).Exec(t)
 						require.NoError(t, err)
-						require.False(t, exist)
+						require.Contains(t, output, "updated pgcluster")
+
+						for _, deploymentName := range test.deployments {
+							for expectedKey, _ := range test.annotations {
+								notHasAnnotation := func() bool {
+									actualAnnotations := TestContext.Kubernetes.GetDeployment(namespace(), deploymentName).Spec.Template.ObjectMeta.GetAnnotations()
+									actualValue := actualAnnotations[expectedKey]
+									if actualValue != "" {
+										return false
+									}
+
+									return true
+								}
+
+								requireWaitFor(t, notHasAnnotation, time.Minute, time.Second,
+									"timeout waiting for annotation key \"%s\" to be removed from deployment \"%s\"", expectedKey, deploymentName)
+							}
+						}
 					})
 				})
 			}
 		})
 
 		t.Run("on update", func(t *testing.T) {
+			t.Parallel()
+
+			tests := []struct {
+				testName     string
+				annotations  map[string]string
+				clusterFlags []string
+				addFlags     []string
+				removeFlags  []string
+				deployments  []string
+			}{
+				{
+					testName: "update-global",
+					annotations: map[string]string{
+						"global":  "here",
+						"global2": "foo",
+					},
+					clusterFlags: []string{"--pgbouncer"},
+					addFlags:     []string{"--annotation=global=here", "--annotation=global2=foo"},
+					removeFlags:  []string{"--annotation=global-", "--annotation=global2-"},
+					deployments:  []string{"update-global", "update-global-backrest-shared-repo", "update-global-pgbouncer"},
+				}, {
+					testName: "update-postgres",
+					annotations: map[string]string{
+						"postgres": "present",
+					},
+					clusterFlags: []string{},
+					addFlags:     []string{"--annotation-postgres=postgres=present"},
+					removeFlags:  []string{"--annotation-postgres=postgres-"},
+					deployments:  []string{"update-postgres"},
+				}, {
+					testName: "update-pgbackrest",
+					annotations: map[string]string{
+						"pgbackrest": "what",
+					},
+					clusterFlags: []string{},
+					addFlags:     []string{"--annotation-pgbackrest=pgbackrest=what"},
+					removeFlags:  []string{"--annotation-pgbackrest=pgbackrest-"},
+					deployments:  []string{"update-pgbackrest-backrest-shared-repo"},
+				}, {
+					testName: "update-pgbouncer",
+					annotations: map[string]string{
+						"pgbouncer": "aqui",
+					},
+					clusterFlags: []string{"--pgbouncer"},
+					addFlags:     []string{"--annotation-pgbouncer=pgbouncer=aqui"},
+					removeFlags:  []string{"--annotation-pgbouncer=pgbouncer-"},
+					deployments:  []string{"update-pgbouncer-pgbouncer"},
+				},
+			}
+
 			for _, test := range tests {
-				withCluster(t, namespace, func(cluster func() string) {
+				test := test // lock test variable in for each run since it changes across parallel loops
+				t.Run(test.testName, func(t *testing.T) {
+					t.Parallel()
+					// create cluster with flag
+					createCMD := []string{"create", "cluster", test.testName, "-n", namespace()}
+					createCMD = append(createCMD, test.clusterFlags...)
+					output, err := pgo(createCMD...).Exec(t)
+					t.Cleanup(func() {
+						teardownCluster(t, namespace(), test.testName, time.Now())
+					})
+					require.NoError(t, err)
+					require.Contains(t, output, "created cluster:")
+
 					// wait for cluster
-					requireClusterReady(t, namespace(), cluster(), (2 * time.Minute))
-	
-					updateCMD := []string{"update", "cluster", cluster(), "-n", namespace(), "--no-prompt"}
-					updateCMD = append(updateCMD, test.flags...)
-					updateCMD = append(updateCMD, test.annFlag+"="+test.annKey+"="+test.annVal)
-					t.Log(updateCMD)
+					requireClusterReady(t, namespace(), test.testName, (2 * time.Minute))
+					if contains(test.clusterFlags, "--pgbouncer") {
+						requirePgBouncerReady(t, namespace(), test.testName, (2 * time.Minute))
+					}
+
+					// add annotations to cluster with pgo update
+					updateCMD := []string{"update", "cluster", test.testName, "-n", namespace(), "--no-prompt"}
+					updateCMD = append(updateCMD, test.addFlags...)
 					output, err = pgo(updateCMD...).Exec(t)
 					require.NoError(t, err)
 					require.Contains(t, output, "updated pgcluster")
-	
-					// after update wait for cluster to re-create
-					waitFor(t, func() bool { return false }, 10*time.Second, time.Second)
-					requireClusterReady(t, namespace(), cluster(), (2 * time.Minute))
-					waitPgBouncerReady(t, namespace(), cluster(), time.Minute)
-	
-					// cluster is created without
-					t.Run(test.testName, func(t *testing.T) {
-						// verify that annotation exists on deployments
-						exist, err := TestContext.Kubernetes.CheckAnnotations(namespace(), test.annKey, test.annVal, test.deployments)
-						require.NoError(t, err)
-						require.True(t, exist)
+
+					t.Run("add", func(t *testing.T) {
+						for _, deploymentName := range test.deployments {
+							for expectedKey, expectedValue := range test.annotations {
+								hasAnnotation := func() bool {
+									actualAnnotations := TestContext.Kubernetes.GetDeployment(namespace(), deploymentName).Spec.Template.ObjectMeta.GetAnnotations()
+									actualValue := actualAnnotations[expectedKey]
+									if actualValue == expectedValue {
+										return true
+									}
+
+									return false
+								}
+
+								requireWaitFor(t, hasAnnotation, time.Minute, time.Second,
+									"timeout waiting for deployment \"%q\" to have annotation \"%s: %s\"", deploymentName, expectedKey, expectedValue)
+							}
+						}
 					})
-				}
+				})
 			}
 		})
 	})

@@ -44,6 +44,16 @@ type Pool struct {
 
 func (p *Pool) Close() error { p.Pool.Close(); return p.Proxy.Close() }
 
+// contains will take a string slice and check if it contains a string
+func contains(s []string, str string) bool {
+	for _, v := range s {
+		if v == str {
+			return true
+		}
+	}
+	return false
+}
+
 // clusterConnection opens a PostgreSQL connection to a database pod. Any error
 // will cause t to FailNow.
 func clusterConnection(t testing.TB, namespace, cluster, dsn string) *Pool {
@@ -189,37 +199,6 @@ func requireClusterReady(t testing.TB, namespace, cluster string, timeout time.D
 	}
 }
 
-// waitPgBouncerReady waits until all PgBouncer deployments for cluster are
-// ready. If timeout elapses or any error occurs, t will FailNow.
-func waitPgBouncerReady(t testing.TB, namespace, cluster string, timeout time.Duration) {
-	t.Helper()
-
-	ready := func() bool {
-		deployments, err := TestContext.Kubernetes.ListDeployments(namespace, map[string]string{
-			"pg-cluster":        cluster,
-			"crunchy-pgbouncer": "true",
-		})
-		require.NoError(t, err)
-
-		if len(deployments) == 0 {
-			return false
-		}
-		for _, deployment := range deployments {
-			if *deployment.Spec.Replicas < 1 ||
-				deployment.Status.ReadyReplicas != *deployment.Spec.Replicas ||
-				deployment.Status.UpdatedReplicas != *deployment.Spec.Replicas {
-				return false
-			}
-		}
-		t.Log("Pgbouncer ready")
-		return true
-	}
-
-	if !ready() {
-		waitFor(t, ready, timeout, time.Second)
-	}
-}
-
 // requirePgBouncerReady waits until all PgBouncer deployments for cluster are
 // ready. If timeout elapses or any error occurs, t will FailNow.
 func requirePgBouncerReady(t testing.TB, namespace, cluster string, timeout time.Duration) {
@@ -359,12 +338,6 @@ func withCluster(t testing.TB, namespace func() string, during func(func() strin
 	var name string
 	var once sync.Once
 
-	defer func() {
-		if name != "" {
-			teardownCluster(t, namespace(), name, created)
-		}
-	}()
-
 	during(func() string {
 		once.Do(func() {
 			generated := names.SimpleNameGenerator.GenerateName("pgo-test-")
@@ -375,6 +348,10 @@ func withCluster(t testing.TB, namespace func() string, during func(func() strin
 				created = time.Now()
 				name = generated
 			}
+
+			t.Cleanup(func() {
+				teardownCluster(t, namespace(), name, created)
+			})
 		})
 		return name
 	})
@@ -396,13 +373,6 @@ func withNamespace(t testing.TB, during func(func() string)) {
 	var namespace *core_v1.Namespace
 	var once sync.Once
 
-	defer func() {
-		if namespace != nil {
-			err := TestContext.Kubernetes.DeleteNamespace(namespace.Name)
-			assert.NoErrorf(t, err, "unable to tear down namespace %q", namespace.Name)
-		}
-	}()
-
 	during(func() string {
 		once.Do(func() {
 			ns, err := TestContext.Kubernetes.GenerateNamespace(
@@ -413,6 +383,11 @@ func withNamespace(t testing.TB, during func(func() string)) {
 				_, err = pgo("update", "namespace", namespace.Name).Exec(t)
 				assert.NoErrorf(t, err, "unable to take ownership of namespace %q", namespace.Name)
 			}
+
+			t.Cleanup(func() {
+				err := TestContext.Kubernetes.DeleteNamespace(namespace.Name)
+				assert.NoErrorf(t, err, "unable to tear down namespace %q", namespace.Name)
+			})
 		})
 
 		return namespace.Name
