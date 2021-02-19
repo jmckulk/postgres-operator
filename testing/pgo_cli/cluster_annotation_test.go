@@ -80,7 +80,6 @@ func TestClusterAnnotation(t *testing.T) {
 				test := test // lock test variable in for each run since it changes across parallel loops
 				t.Run(test.testName, func(t *testing.T) {
 					t.Parallel()
-					// create cluster with flag
 					createCMD := []string{"create", "cluster", test.testName, "-n", namespace()}
 					createCMD = append(createCMD, test.clusterFlags...)
 					createCMD = append(createCMD, test.addFlags...)
@@ -91,7 +90,6 @@ func TestClusterAnnotation(t *testing.T) {
 					require.NoError(t, err)
 					require.Contains(t, output, "created cluster:")
 
-					// wait for cluster
 					requireClusterReady(t, namespace(), test.testName, (2 * time.Minute))
 					if contains(test.clusterFlags, "--pgbouncer") {
 						requirePgBouncerReady(t, namespace(), test.testName, (2 * time.Minute))
@@ -153,7 +151,6 @@ func TestClusterAnnotation(t *testing.T) {
 				annotations  map[string]string
 				clusterFlags []string
 				addFlags     []string
-				removeFlags  []string
 				deployments  []string
 			}{
 				{
@@ -164,7 +161,6 @@ func TestClusterAnnotation(t *testing.T) {
 					},
 					clusterFlags: []string{"--pgbouncer"},
 					addFlags:     []string{"--annotation=global=here", "--annotation=global2=foo"},
-					removeFlags:  []string{"--annotation=global-", "--annotation=global2-"},
 					deployments:  []string{"update-global", "update-global-backrest-shared-repo", "update-global-pgbouncer"},
 				}, {
 					testName: "update-postgres",
@@ -173,7 +169,6 @@ func TestClusterAnnotation(t *testing.T) {
 					},
 					clusterFlags: []string{},
 					addFlags:     []string{"--annotation-postgres=postgres=present"},
-					removeFlags:  []string{"--annotation-postgres=postgres-"},
 					deployments:  []string{"update-postgres"},
 				}, {
 					testName: "update-pgbackrest",
@@ -182,7 +177,6 @@ func TestClusterAnnotation(t *testing.T) {
 					},
 					clusterFlags: []string{},
 					addFlags:     []string{"--annotation-pgbackrest=pgbackrest=what"},
-					removeFlags:  []string{"--annotation-pgbackrest=pgbackrest-"},
 					deployments:  []string{"update-pgbackrest-backrest-shared-repo"},
 				}, {
 					testName: "update-pgbouncer",
@@ -191,7 +185,6 @@ func TestClusterAnnotation(t *testing.T) {
 					},
 					clusterFlags: []string{"--pgbouncer"},
 					addFlags:     []string{"--annotation-pgbouncer=pgbouncer=aqui"},
-					removeFlags:  []string{"--annotation-pgbouncer=pgbouncer-"},
 					deployments:  []string{"update-pgbouncer-pgbouncer"},
 				},
 			}
@@ -200,7 +193,6 @@ func TestClusterAnnotation(t *testing.T) {
 				test := test // lock test variable in for each run since it changes across parallel loops
 				t.Run(test.testName, func(t *testing.T) {
 					t.Parallel()
-					// create cluster with flag
 					createCMD := []string{"create", "cluster", test.testName, "-n", namespace()}
 					createCMD = append(createCMD, test.clusterFlags...)
 					output, err := pgo(createCMD...).Exec(t)
@@ -210,13 +202,11 @@ func TestClusterAnnotation(t *testing.T) {
 					require.NoError(t, err)
 					require.Contains(t, output, "created cluster:")
 
-					// wait for cluster
 					requireClusterReady(t, namespace(), test.testName, (2 * time.Minute))
 					if contains(test.clusterFlags, "--pgbouncer") {
 						requirePgBouncerReady(t, namespace(), test.testName, (2 * time.Minute))
 					}
 
-					// add annotations to cluster with pgo update
 					updateCMD := []string{"update", "cluster", test.testName, "-n", namespace(), "--no-prompt"}
 					updateCMD = append(updateCMD, test.addFlags...)
 					output, err = pgo(updateCMD...).Exec(t)
