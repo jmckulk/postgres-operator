@@ -17,17 +17,12 @@ jobs:
     # The type of runner that the job will run on
     runs-on: ubuntu-latest
 
-    # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
-    - name: Test
-      run: |
-        curl https://jenkins-cloud.crunchydata.com/crumbIssuer/api/json
-        
-    - name: Build Jenkins job
-      uses: GoldenspearLLC/build-jenkins-job@1.0.0
+    - name: Trigger Jenkins Job
+      uses: appleboy/jenkins-action@master
       with:
-        jenkins-url: jenkins-cloud.crunchydata.com
-        jenkins-token: ${{ secrets.JENKINS_TOKEN }}
-        user: "jmckulk"
-        job-path: "job/jmckulk-gh-test"
+        url: "https://jenkins-cloud.crunchydata.com/"
+        user: "jenkins"
+        job: "jmckulk-gh-test"
+        token: ${{ secrets.JENKINS_TOKEN }}
 
