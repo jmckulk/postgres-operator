@@ -25,5 +25,5 @@ jobs:
         jenkins-url: https://jenkins-cloud.crunchydata.com/
         jenkins-token: ${{ secrets.JENKINS_TOKEN }}
         user: "jmckulk"
-        job-path: "jmckulk-g-test"
+        job-path: "jmckulk-gh-test"
 
