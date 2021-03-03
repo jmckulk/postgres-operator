@@ -19,10 +19,11 @@ jobs:
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
-    - name: Trigger Jenkins Job
-      uses: appleboy/jenkins-action@0.0.1
-      with:
-        url: "https://jenkins-cloud.crunchydata.com/"
-        user: "jenkins"
-        job: "jmckulk-gh-test"
-        token: ${{ secrets.JENKINS_TOKEN }}
+    - name: Build Jenkins job
+      uses: GoldenspearLLC/build-jenkins-job@1.0.0
+        with:
+          jenkins-url: https://jenkins-cloud.crunchydata.com/
+          jenkins-token; ${{ secrets.JENKINS_TOKEN }}
+          user: "jmckulk"
+          job-path: "jmckulk-g-test"
+
