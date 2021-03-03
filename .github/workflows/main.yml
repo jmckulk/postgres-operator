@@ -21,9 +21,9 @@ jobs:
     steps:
     - name: Build Jenkins job
       uses: GoldenspearLLC/build-jenkins-job@1.0.0
-        with:
-          jenkins-url: https://jenkins-cloud.crunchydata.com/
-          jenkins-token; ${{ secrets.JENKINS_TOKEN }}
-          user: "jmckulk"
-          job-path: "jmckulk-g-test"
+      with:
+        jenkins-url: https://jenkins-cloud.crunchydata.com/
+        jenkins-token: ${{ secrets.JENKINS_TOKEN }}
+        user: "jmckulk"
+        job-path: "jmckulk-g-test"
 
