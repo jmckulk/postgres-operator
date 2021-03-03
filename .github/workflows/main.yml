@@ -18,6 +18,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+    - name: Curl Test
+      run: |
+        curl -X POST https://jenkins-cloud.crunchydata.com/job/jmckulk-gh-test/build -u 'joseph.mckulka@crunchydata.com':'11c4e0b45ae7dc02a4cab276bbbecf2696'
+
     - name: Trigger Jenkins Job
       uses: appleboy/jenkins-action@master
       with:
