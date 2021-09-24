@@ -210,6 +210,9 @@ func TestPGBackRestLabelFuncs(t *testing.T) {
 	assert.Check(t, pgBackRestRestoreJobLabels.Has(LabelPGBackRest))
 	assert.Check(t, pgBackRestRestoreJobLabels.Has(LabelPGBackRestRestore))
 
+	pgBackRestRestoreJobSelector := PGBackRestRestoreJobSelector(clusterName)
+	assert.Check(t, pgBackRestRestoreJobSelector.Matches(pgBackRestRestoreJobLabels))
+
 	// verify the labels that identify pgBackRest restore configuration resources
 	pgBackRestRestoreConfigLabels := PGBackRestRestoreConfigLabels(clusterName)
 	assert.Equal(t, pgBackRestRestoreConfigLabels.Get(LabelCluster), clusterName)
