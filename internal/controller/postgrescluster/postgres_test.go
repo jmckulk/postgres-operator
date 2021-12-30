@@ -414,8 +414,14 @@ volumeMode: Filesystem
 					assert.Assert(t, returned == nil)
 
 					key, fetched := client.ObjectKeyFromObject(pvc), &corev1.PersistentVolumeClaim{}
-					assert.NilError(t, tClient.Get(ctx, key, fetched))
-					assert.Assert(t, fetched.DeletionTimestamp != nil, "expected deleted")
+					err = tClient.Get(ctx, key, fetched)
+					assert.NilError(t, client.IgnoreNotFound(err))
+					// If we have a NotFound error the item has been deleted
+					if !apierrors.IsNotFound(err) {
+						// If we don't have a NotFound error, the item still exists
+						// check that the item is marked for deletion
+						assert.Assert(t, fetched.DeletionTimestamp != nil, "expected deleted")
+					}
 
 					// Pods will redeploy while the PVC is scheduled for deletion.
 					observed.Pods = nil
