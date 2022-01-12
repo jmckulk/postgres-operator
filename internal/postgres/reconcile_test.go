@@ -187,7 +187,7 @@ initContainers:
   - -ceu
   - --
   - |-
-    declare -r expected_major_version="$1" pgwal_directory="$2"
+    declare -r expected_major_version="$1" pgwal_directory="$2" pgbrLog_directory="$3"
     results() { printf '::postgres-operator: %s::%s\n' "$@"; }
     safelink() (
       local desired="$1" name="$2" current
@@ -209,6 +209,8 @@ initContainers:
     [ -d "${bootstrap_dir}" ] && results 'bootstrap directory' "${bootstrap_dir}"
     [ -d "${bootstrap_dir}" ] && postgres_data_directory="${bootstrap_dir}"
     install --directory --mode=0700 "${postgres_data_directory}"
+    results 'pgBackRest log directory' "${pgbrLog_directory}"
+    install --directory --mode=0775 "${pgbrLog_directory}"
     install -D --mode=0600 -t "/tmp/replication" "/pgconf/tls/replication"/{tls.crt,tls.key,ca.crt}
     [ -f "${postgres_data_directory}/PG_VERSION" ] || exit 0
     results 'data version' "${postgres_data_version:=$(< "${postgres_data_directory}/PG_VERSION")}"
@@ -218,6 +220,7 @@ initContainers:
   - startup
   - "11"
   - /pgdata/pg11_wal
+  - /pgdata/pgbackrest/log
   env:
   - name: PGDATA
     value: /pgdata/pg11
@@ -394,7 +397,7 @@ volumes:
 
 		// Startup moves WAL files to data volume.
 		assert.DeepEqual(t, pod.InitContainers[0].Command[4:],
-			[]string{"startup", "11", "/pgdata/pg11_wal"})
+			[]string{"startup", "11", "/pgdata/pg11_wal", "/pgdata/pgbackrest/log"})
 	})
 
 	t.Run("WithWALVolumeWithWALVolumeSpec", func(t *testing.T) {
@@ -494,7 +497,7 @@ volumes:
 
 		// Startup moves WAL files to WAL volume.
 		assert.DeepEqual(t, pod.InitContainers[0].Command[4:],
-			[]string{"startup", "11", "/pgwal/pg11_wal"})
+			[]string{"startup", "11", "/pgwal/pg11_wal", "/pgdata/pgbackrest/log"})
 	})
 }
 

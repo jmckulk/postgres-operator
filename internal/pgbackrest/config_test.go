@@ -29,7 +29,9 @@ import (
 	"testing"
 
 	"gotest.tools/v3/assert"
+	"gotest.tools/v3/assert/cmp"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/rand"
@@ -155,7 +157,7 @@ func TestPGBackRestConfiguration(t *testing.T) {
 
 		assert.Equal(t, getCMData(cmReturned, CMRepoKey),
 			`[global]
-log-path=/tmp
+log-path=/pgbackrest/repo1/log
 repo1-path=/pgbackrest/repo1
 repo2-azure-container=container
 repo2-path=/pgbackrest/repo2
@@ -184,7 +186,7 @@ pg1-socket-path=/tmp/postgres
 
 		assert.Equal(t, getCMData(cmReturned, CMInstanceKey),
 			`[global]
-log-path=/tmp
+log-path=/pgdata/pgbackrest/log
 repo1-host=`+testRepoName+`-0.testcluster-pods.test-ns.svc.`+domain+`
 repo1-host-user=postgres
 repo1-path=/pgbackrest/repo1
@@ -331,4 +333,61 @@ func TestRestoreCommandPrettyYAML(t *testing.T) {
 	assert.NilError(t, err)
 	assert.Assert(t, strings.Contains(string(b), "\n- |"),
 		"expected literal block scalar, got:\n%s", b)
+}
+
+func TestMakePGBackrestLogDir(t *testing.T) {
+	podTemplate := &corev1.PodTemplateSpec{Spec: corev1.PodSpec{
+		InitContainers: []corev1.Container{
+			{Name: "test"},
+		},
+		Containers: []corev1.Container{
+			{Name: "pgbackrest",
+				Resources: corev1.ResourceRequirements{
+					Limits: corev1.ResourceList{
+						corev1.ResourceCPU: resource.MustParse("23m"),
+					},
+				},
+			},
+		}}}
+
+	cluster := &v1beta1.PostgresCluster{
+		Spec: v1beta1.PostgresClusterSpec{
+			ImagePullPolicy: corev1.PullAlways,
+			Backups: v1beta1.Backups{
+				PGBackRest: v1beta1.PGBackRestArchive{
+					Image: "test-image",
+					Repos: []v1beta1.PGBackRestRepo{
+						{Name: "repo1"},
+						{Name: "repo2",
+							Volume: &v1beta1.RepoPVC{},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	beforeAddInit := podTemplate.Spec.InitContainers
+
+	MakePGBackrestLogDir(podTemplate, cluster)
+
+	assert.Equal(t, len(beforeAddInit)+1, len(podTemplate.Spec.InitContainers))
+
+	var foundInitContainer bool
+	// verify init container command, image & name
+	for _, c := range podTemplate.Spec.InitContainers {
+		if c.Name == naming.ContainerPGBackRestLogDirInit {
+			// ignore "bash -c", should skip repo with no volume
+			assert.Equal(t, "mkdir -p /pgbackrest/repo2/log", c.Command[2])
+			assert.Equal(t, c.Image, "test-image")
+			assert.Equal(t, c.ImagePullPolicy, corev1.PullAlways)
+			assert.Assert(t, !cmp.DeepEqual(c.SecurityContext,
+				&corev1.SecurityContext{})().Success())
+			assert.Equal(t, c.Resources.Limits.Cpu().String(), "23m")
+			foundInitContainer = true
+			break
+		}
+	}
+	// verify init container is present
+	assert.Assert(t, foundInitContainer)
 }

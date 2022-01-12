@@ -576,6 +576,10 @@ func (r *Reconciler) generateRepoHostIntent(postgresCluster *v1beta1.PostgresClu
 		resources); err != nil {
 		return nil, errors.WithStack(err)
 	}
+
+	// add the init container to make the pgBackRest repo volume log directory
+	pgbackrest.MakePGBackrestLogDir(&repo.Spec.Template, postgresCluster)
+
 	// add pgBackRest repo volumes to pod
 	if err := pgbackrest.AddRepoVolumesToPod(postgresCluster, &repo.Spec.Template,
 		getRepoPVCNames(postgresCluster, repoResources.pvcs),
