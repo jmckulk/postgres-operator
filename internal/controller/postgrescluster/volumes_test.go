@@ -912,6 +912,9 @@ func TestReconcileMoveDirectories(t *testing.T) {
 			PostgresVersion: 13,
 			Image:           "example.com/crunchy-postgres-ha:test",
 			ImagePullPolicy: corev1.PullAlways,
+			ImagePullSecrets: []corev1.LocalObjectReference{{
+				Name: "test-secret",
+			}},
 			DataSource: &v1beta1.DataSource{
 				Volumes: &v1beta1.DataSourceVolumes{
 					PGDataVolume: &v1beta1.DataSourceVolume{
@@ -1028,6 +1031,8 @@ containers:
   - mountPath: /pgdata
     name: postgres-data
 dnsPolicy: ClusterFirst
+imagePullSecrets:
+- name: test-secret
 priorityClassName: some-priority-class
 restartPolicy: Never
 schedulerName: default-scheduler
@@ -1078,6 +1083,8 @@ containers:
   - mountPath: /pgwal
     name: postgres-wal
 dnsPolicy: ClusterFirst
+imagePullSecrets:
+- name: test-secret
 priorityClassName: some-priority-class
 restartPolicy: Never
 schedulerName: default-scheduler
@@ -1130,6 +1137,8 @@ containers:
   - mountPath: /pgbackrest
     name: pgbackrest-repo
 dnsPolicy: ClusterFirst
+imagePullSecrets:
+- name: test-secret
 priorityClassName: some-priority-class
 restartPolicy: Never
 schedulerName: default-scheduler
