@@ -127,6 +127,12 @@ func AddConfigsToPod(postgresCluster *v1beta1.PostgresCluster, template *corev1.
 		pgBackRestConfigs = append(pgBackRestConfigs, postgresCluster.Spec.DataSource.PGBackRest.Configuration...)
 	}
 
+	// For a PostgresCluster restore, append all pgBackRest configuration from
+	// the source cluster for the restore
+	if sourceCluster != nil {
+		sources = append(pgBackRestConfigs, sourceCluster.Spec.Backups.PGBackRest.Configuration...)
+	}
+
 	template.Spec.Volumes = append(template.Spec.Volumes, corev1.Volume{
 		Name: ConfigVol,
 		VolumeSource: corev1.VolumeSource{
