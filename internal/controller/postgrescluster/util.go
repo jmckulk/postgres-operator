@@ -157,6 +157,10 @@ func addNSSWrapper(image string, imagePullPolicy corev1.PullPolicy, template *co
 				container.Resources = template.Spec.Containers[i].Resources
 				break
 			}
+			if c.Name == naming.PGBackRestRestoreContainerName {
+				container.Resources = template.Spec.Containers[i].Resources
+				break
+			}
 		}
 	}
 	template.Spec.InitContainers = append(template.Spec.InitContainers, container)
