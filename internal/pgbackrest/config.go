@@ -57,11 +57,6 @@ const (
 	// configPath is the pgBackRest configuration file path
 	configPath = "/etc/pgbackrest/pgbackrest.conf"
 
-	// CMNameSuffix is the suffix used with postgrescluster name for associated configmap.
-	// for instance, if the cluster is named 'mycluster', the
-	// configmap will be named 'mycluster-pgbackrest-config'
-	CMNameSuffix = "%s-pgbackrest-config"
-
 	// repoMountPath is where to mount the pgBackRest repo volume.
 	repoMountPath = "/pgbackrest"
 )

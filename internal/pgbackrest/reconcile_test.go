@@ -179,33 +179,53 @@ func TestAddConfigsToPod(t *testing.T) {
 	postgresCluster := &v1beta1.PostgresCluster{ObjectMeta: metav1.ObjectMeta{Name: "hippo"}}
 
 	testCases := []struct {
-		configs    []corev1.VolumeProjection
-		containers []corev1.Container
+		configs           []corev1.VolumeProjection
+		datasourceConfigs []corev1.VolumeProjection
+		containers        []corev1.Container
 	}{{
 		configs: []corev1.VolumeProjection{
 			{ConfigMap: &corev1.ConfigMapProjection{
 				LocalObjectReference: corev1.LocalObjectReference{Name: "cust-config.conf"}}},
 			{Secret: &corev1.SecretProjection{
 				LocalObjectReference: corev1.LocalObjectReference{Name: "cust-secret.conf"}}}},
-		containers: []corev1.Container{{Name: "database"}, {Name: "pgbackrest"}},
+		datasourceConfigs: []corev1.VolumeProjection{},
+		containers:        []corev1.Container{{Name: "database"}, {Name: "pgbackrest"}},
 	}, {
 		configs: []corev1.VolumeProjection{
 			{ConfigMap: &corev1.ConfigMapProjection{
 				LocalObjectReference: corev1.LocalObjectReference{Name: "cust-config.conf"}}},
 			{Secret: &corev1.SecretProjection{
 				LocalObjectReference: corev1.LocalObjectReference{Name: "cust-secret.conf"}}}},
-		containers: []corev1.Container{{Name: "pgbackrest"}},
+		datasourceConfigs: []corev1.VolumeProjection{},
+		containers:        []corev1.Container{{Name: "pgbackrest"}},
 	}, {
-		configs:    []corev1.VolumeProjection{},
+		configs:           []corev1.VolumeProjection{},
+		datasourceConfigs: []corev1.VolumeProjection{},
+		containers:        []corev1.Container{{Name: "database"}, {Name: "pgbackrest"}},
+	}, {
+		configs: []corev1.VolumeProjection{},
+		datasourceConfigs: []corev1.VolumeProjection{
+			{ConfigMap: &corev1.ConfigMapProjection{
+				LocalObjectReference: corev1.LocalObjectReference{Name: "datasource-config.conf"}}},
+			{Secret: &corev1.SecretProjection{
+				LocalObjectReference: corev1.LocalObjectReference{Name: "datasource-secret.conf"}}}},
 		containers: []corev1.Container{{Name: "database"}, {Name: "pgbackrest"}},
 	}, {
-		configs:    []corev1.VolumeProjection{},
-		containers: []corev1.Container{{Name: "pgbackrest"}},
+		configs:           []corev1.VolumeProjection{},
+		datasourceConfigs: []corev1.VolumeProjection{},
+		containers:        []corev1.Container{{Name: "pgbackrest"}},
 	}}
 
 	for _, tc := range testCases {
 		t.Run(fmt.Sprintf("configs=%d, containers=%d", len(tc.configs), len(tc.containers)), func(t *testing.T) {
 			postgresCluster.Spec.Backups.PGBackRest.Configuration = tc.configs
+			if len(tc.datasourceConfigs) > 0 {
+				postgresCluster.Spec.DataSource = &v1beta1.DataSource{
+					PGBackRest: &v1beta1.PGBackRestDataSource{
+						Configuration: tc.datasourceConfigs,
+					},
+				}
+			}
 			template := &corev1.PodTemplateSpec{
 				Spec: corev1.PodSpec{
 					Containers: tc.containers,
@@ -244,7 +264,7 @@ func TestAddConfigsToPod(t *testing.T) {
 			}
 
 			// verify custom configs are present in the backrest config volume
-			for _, c := range tc.configs {
+			for _, c := range append(tc.configs, tc.datasourceConfigs...) {
 				var foundCustomConfig bool
 				for _, s := range configVol.Projected.Sources {
 					if equality.Semantic.DeepEqual(c, s) {

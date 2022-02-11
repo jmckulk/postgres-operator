@@ -119,7 +119,13 @@ func AddConfigsToPod(postgresCluster *v1beta1.PostgresCluster, template *corev1.
 			},
 		},
 	}
+
 	pgBackRestConfigs = append(pgBackRestConfigs, defaultConfig)
+	if postgresCluster.Spec.DataSource != nil &&
+		postgresCluster.Spec.DataSource.PGBackRest != nil &&
+		postgresCluster.Spec.DataSource.PGBackRest.Configuration != nil {
+		pgBackRestConfigs = append(pgBackRestConfigs, postgresCluster.Spec.DataSource.PGBackRest.Configuration...)
+	}
 
 	template.Spec.Volumes = append(template.Spec.Volumes, corev1.Volume{
 		Name: ConfigVol,
