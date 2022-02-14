@@ -219,7 +219,7 @@ check-kuttl:
 
 # Set reasonable default for KUTTL_ env vars for templating
 KUTTL_PG_VERSION ?= 14
-KUTTL_PSQL_IMAGE ?= registry.developers.crunchydata.com/crunchydata/crunchy-postgres:centos8-14.1-0
+KUTTL_PSQL_IMAGE ?= registry.developers.crunchydata.com/crunchydata/crunchy-postgres:centos8-14.2-0
 
 # TODO: When I attempted to loop through the directories and find the yaml files,
 # due to how makefile expands variables, each file would end up in each directory.
