@@ -110,7 +110,7 @@ deploy:
 # `kubectl.kubernetes.io/last-applied-configuration` from the CRD since it was violating the limit
 # on size of `metadata.annotations`
 # - https://github.com/kubernetes/kubernetes/blob/master/staging/src/k8s.io/apimachinery/pkg/api/validation/objectmeta.go#L36
-deploy-dev: build-postgres-operator
+deploy-dev: build-postgres-operator createnamespaces
 	$(PGO_KUBE_CLIENT) apply --server-side=true --force-conflicts -k ./config/dev
 	hack/create-kubeconfig.sh postgres-operator pgo
 	env \
@@ -193,12 +193,12 @@ pgo-base-docker: pgo-base-build
 #======== Utility =======
 .PHONY: check
 check:
-	$(GO_TEST) -cover ./...
+	PGO_NAMESPACE="postgres-operator" $(GO_TEST) -cover ./...
 
 # - KUBEBUILDER_ATTACH_CONTROL_PLANE_OUTPUT=true
 .PHONY: check-envtest
 check-envtest: hack/tools/envtest
-	KUBEBUILDER_ASSETS="$(CURDIR)/$^/bin" $(GO_TEST) -count=1 -cover -tags=envtest ./...
+	KUBEBUILDER_ASSETS="$(CURDIR)/$^/bin" PGO_NAMESPACE="postgres-operator" $(GO_TEST) -count=1 -cover -tags=envtest ./...
 
 # - PGO_TEST_TIMEOUT_SCALE=1
 # Note: using `--server-side=true --force-conflicts` when applying the K8s objects in order to remove the
@@ -206,9 +206,9 @@ check-envtest: hack/tools/envtest
 # on size of `metadata.annotations`
 # - https://github.com/kubernetes/kubernetes/blob/master/staging/src/k8s.io/apimachinery/pkg/api/validation/objectmeta.go#L36
 .PHONY: check-envtest-existing
-check-envtest-existing:
+check-envtest-existing: createnamespaces
 	${PGO_KUBE_CLIENT} apply --server-side=true --force-conflicts -k ./config/dev
-	USE_EXISTING_CLUSTER=true $(GO_TEST) -count=1 -cover -p=1 -tags=envtest ./...
+	USE_EXISTING_CLUSTER=true PGO_NAMESPACE="postgres-operator" $(GO_TEST) -count=1 -cover -p=1 -tags=envtest ./...
 	${PGO_KUBE_CLIENT} delete -k ./config/dev
 
 # Expects operator to be running
@@ -228,22 +228,21 @@ KUTTL_PSQL_IMAGE ?= registry.developers.crunchydata.com/crunchydata/crunchy-post
 # For safety, this removes the `testing/kuttl/generated` folder if it exists
 .PHONY: generate-kuttl
 generate-kuttl:
-       [ ! -d testing/kuttl/generated ] || rm -r testing/kuttl/generated
-       for SRCDIR in $(shell ls testing/kuttl/source); do \
-               mkdir -p testing/kuttl/generated/$${SRCDIR}; \
-       done;
-       for FILEPATH in $(wildcard testing/kuttl/source/*/*.yaml); do \
-               NEW_FILEPATH=`echo $${FILEPATH} | sed 's/source/generated/'`; \
-               KUTTL_PG_VERSION=$(KUTTL_PG_VERSION) \
-                       KUTTL_PSQL_IMAGE=$(KUTTL_PSQL_IMAGE) \
-                       envsubst < $${FILEPATH} > $${NEW_FILEPATH}; \
-       done
+	[ ! -d testing/kuttl/generated ] || rm -r testing/kuttl/generated
+	for SRCDIR in $(shell ls testing/kuttl/source); do \
+		mkdir -p testing/kuttl/generated/$${SRCDIR}; \
+	done;
+	for FILEPATH in $(wildcard testing/kuttl/source/*/*.yaml); do \
+		NEW_FILEPATH=`echo $${FILEPATH} | sed 's/source/generated/'`; \
+		KUTTL_PG_VERSION=$(KUTTL_PG_VERSION) \
+			KUTTL_PSQL_IMAGE=$(KUTTL_PSQL_IMAGE) \
+			envsubst < $${FILEPATH} > $${NEW_FILEPATH}; \
+	done
 
 .PHONY: check-generated-kuttl
 check-generated-kuttl: generate-kuttl
-       ${PGO_KUBE_CLIENT} ${KUTTL_TEST} \
-               --config testing/kuttl/kuttl-test-generated.yaml
-
+	${PGO_KUBE_CLIENT} ${KUTTL_TEST} \
+		--config testing/kuttl/kuttl-test-generated.yaml
 
 .PHONY: check-generate
 check-generate: generate-crd generate-deepcopy generate-rbac
@@ -288,7 +287,7 @@ generate: generate-crd generate-crd-docs generate-deepcopy generate-rbac
 
 generate-crd:
 	GOBIN='$(CURDIR)/hack/tools' ./hack/controller-generator.sh \
-		crd:crdVersions='v1',preserveUnknownFields='false' \
+		crd:crdVersions='v1' \
 		paths='./pkg/apis/...' \
 		output:dir='build/crd/generated' # build/crd/generated/{group}_{plural}.yaml
 	@
