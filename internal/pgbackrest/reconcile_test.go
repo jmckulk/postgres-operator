@@ -178,10 +178,28 @@ func TestAddConfigsToPod(t *testing.T) {
 
 	postgresCluster := &v1beta1.PostgresCluster{ObjectMeta: metav1.ObjectMeta{Name: "hippo"}}
 
+	customSecret := corev1.SecretProjection{}
+	customSecret.Name = "clustersource-secret"
+	customCM := corev1.ConfigMapProjection{}
+	customCM.Name = "clustersource-configmap"
+
+	sourceClusterWithSecret := &v1beta1.PostgresCluster{ObjectMeta: metav1.ObjectMeta{Name: "lion"}}
+	sourceClusterWithSecret.Spec.Backups.PGBackRest.Configuration = []corev1.VolumeProjection{{Secret: &customSecret}}
+
+	sourceClusterWithCM := &v1beta1.PostgresCluster{ObjectMeta: metav1.ObjectMeta{Name: "rhino"}}
+	sourceClusterWithCM.Spec.Backups.PGBackRest.Configuration = []corev1.VolumeProjection{{ConfigMap: &customCM}}
+
+	sourceClusterWithBoth := &v1beta1.PostgresCluster{ObjectMeta: metav1.ObjectMeta{Name: "elephant"}}
+	sourceClusterWithBoth.Spec.Backups.PGBackRest.Configuration = []corev1.VolumeProjection{{
+		Secret:    &customSecret,
+		ConfigMap: &customCM,
+	}}
+
 	testCases := []struct {
 		configs           []corev1.VolumeProjection
 		datasourceConfigs []corev1.VolumeProjection
 		containers        []corev1.Container
+		sourceCluster     *v1beta1.PostgresCluster
 	}{{
 		configs: []corev1.VolumeProjection{
 			{ConfigMap: &corev1.ConfigMapProjection{
@@ -190,6 +208,7 @@ func TestAddConfigsToPod(t *testing.T) {
 				LocalObjectReference: corev1.LocalObjectReference{Name: "cust-secret.conf"}}}},
 		datasourceConfigs: []corev1.VolumeProjection{},
 		containers:        []corev1.Container{{Name: "database"}, {Name: "pgbackrest"}},
+		sourceCluster:     &v1beta1.PostgresCluster{ObjectMeta: metav1.ObjectMeta{Name: "emptysource"}},
 	}, {
 		configs: []corev1.VolumeProjection{
 			{ConfigMap: &corev1.ConfigMapProjection{
@@ -198,10 +217,12 @@ func TestAddConfigsToPod(t *testing.T) {
 				LocalObjectReference: corev1.LocalObjectReference{Name: "cust-secret.conf"}}}},
 		datasourceConfigs: []corev1.VolumeProjection{},
 		containers:        []corev1.Container{{Name: "pgbackrest"}},
+		sourceCluster:     nil,
 	}, {
 		configs:           []corev1.VolumeProjection{},
 		datasourceConfigs: []corev1.VolumeProjection{},
 		containers:        []corev1.Container{{Name: "database"}, {Name: "pgbackrest"}},
+		sourceCluster:     sourceClusterWithSecret,
 	}, {
 		configs: []corev1.VolumeProjection{},
 		datasourceConfigs: []corev1.VolumeProjection{
@@ -209,11 +230,13 @@ func TestAddConfigsToPod(t *testing.T) {
 				LocalObjectReference: corev1.LocalObjectReference{Name: "datasource-config.conf"}}},
 			{Secret: &corev1.SecretProjection{
 				LocalObjectReference: corev1.LocalObjectReference{Name: "datasource-secret.conf"}}}},
-		containers: []corev1.Container{{Name: "database"}, {Name: "pgbackrest"}},
+		containers:    []corev1.Container{{Name: "database"}, {Name: "pgbackrest"}},
+		sourceCluster: sourceClusterWithBoth,
 	}, {
 		configs:           []corev1.VolumeProjection{},
 		datasourceConfigs: []corev1.VolumeProjection{},
 		containers:        []corev1.Container{{Name: "pgbackrest"}},
+		sourceCluster:     sourceClusterWithCM,
 	}}
 
 	for _, tc := range testCases {
@@ -232,7 +255,7 @@ func TestAddConfigsToPod(t *testing.T) {
 				},
 			}
 
-			err := AddConfigsToPod(postgresCluster, template, CMInstanceKey,
+			err := AddConfigsToPod(postgresCluster, tc.sourceCluster, template, CMInstanceKey,
 				getContainerNames(tc.containers)...)
 			assert.NilError(t, err)
 
@@ -253,6 +276,9 @@ func TestAddConfigsToPod(t *testing.T) {
 			// check that the backrest config volume contains default configs
 			var foundDefaultConfigMapVol bool
 			cmName := naming.PGBackRestConfig(postgresCluster).Name
+			if tc.sourceCluster != nil {
+				cmName = naming.PGBackRestConfig(tc.sourceCluster).Name
+			}
 			for _, s := range configVol.Projected.Sources {
 				if s.ConfigMap != nil && s.ConfigMap.Name == cmName {
 					foundDefaultConfigMapVol = true
@@ -264,7 +290,11 @@ func TestAddConfigsToPod(t *testing.T) {
 			}
 
 			// verify custom configs are present in the backrest config volume
-			for _, c := range append(tc.configs, tc.datasourceConfigs...) {
+			configs := append(tc.configs, tc.datasourceConfigs...)
+			if tc.sourceCluster != nil {
+				configs = append(configs, tc.sourceCluster.Spec.Backups.PGBackRest.Configuration...)
+			}
+			for _, c := range configs {
 				var foundCustomConfig bool
 				for _, s := range configVol.Projected.Sources {
 					if equality.Semantic.DeepEqual(c, s) {

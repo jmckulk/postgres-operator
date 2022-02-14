@@ -24,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	"gotest.tools/v3/assert"
 	"gotest.tools/v3/assert/cmp"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -122,6 +123,22 @@ func testCluster() *v1beta1.PostgresCluster {
 		},
 	}
 	return cluster.DeepCopy()
+}
+
+// setupNamespace creates a random namespace that will be deleted by t.Cleanup.
+// When creation fails, it calls t.Fatal. The caller may delete the namespace
+// at any time.
+func setupNamespace(t testing.TB, cc client.Client) *corev1.Namespace {
+	t.Helper()
+	ns := &corev1.Namespace{}
+	ns.GenerateName = "postgres-operator-test-"
+	ns.Labels = map[string]string{"postgres-operator-test": t.Name()}
+
+	ctx := context.Background()
+	assert.NilError(t, cc.Create(ctx, ns))
+	t.Cleanup(func() { assert.Check(t, client.IgnoreNotFound(cc.Delete(ctx, ns))) })
+
+	return ns
 }
 
 // setupTestEnv configures and starts an EnvTest instance of etcd and the Kubernetes API server

@@ -2450,9 +2450,8 @@ func TestReconcileCloudBasedDataSource(t *testing.T) {
 }
 
 func TestCopyConfigurationResources(t *testing.T) {
-	_, tClient := setupKubernetes(t)
+	_, tClient, _ := setupTestEnv(t, ControllerName)
 	ctx := context.Background()
-	require.ParallelCapacity(t, 2)
 
 	r := &Reconciler{Client: tClient, Owner: client.FieldOwner(t.Name())}
 
@@ -2586,7 +2585,7 @@ func TestCopyConfigurationResources(t *testing.T) {
 		sc := sourceCluster("0")
 
 		assert.Check(t, apierrors.IsNotFound(
-			r.copyConfigurationResources(ctx, cluster("0", sc.Name, sc.Namespace), sc)))
+			r.copyConfigurationResources(ctx, cluster("0", sc.Name, sc.Namespace), sc, ns1.Name)))
 	})
 	t.Run("Only Secret", func(t *testing.T) {
 		secret := secret("1")
@@ -2598,7 +2597,7 @@ func TestCopyConfigurationResources(t *testing.T) {
 		sc := sourceCluster("1")
 
 		assert.Check(t, apierrors.IsNotFound(
-			r.copyConfigurationResources(ctx, cluster("1", sc.Name, sc.Namespace), sc)))
+			r.copyConfigurationResources(ctx, cluster("1", sc.Name, sc.Namespace), sc, ns1.Name)))
 	})
 	t.Run("Only ConfigMap", func(t *testing.T) {
 		configMap := configMap("2")
@@ -2610,7 +2609,7 @@ func TestCopyConfigurationResources(t *testing.T) {
 		sc := sourceCluster("2")
 
 		assert.Check(t, apierrors.IsNotFound(
-			r.copyConfigurationResources(ctx, cluster("2", sc.Name, sc.Namespace), sc)))
+			r.copyConfigurationResources(ctx, cluster("2", sc.Name, sc.Namespace), sc, ns1.Name)))
 	})
 	t.Run("Secret and ConfigMap, neither optional", func(t *testing.T) {
 		secret := secret("3")
@@ -2631,7 +2630,7 @@ func TestCopyConfigurationResources(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		assert.NilError(t, r.copyConfigurationResources(ctx, nc, sc))
+		assert.NilError(t, r.copyConfigurationResources(ctx, nc, sc, ns1.Name))
 
 		assert.NilError(t, checkSecret(secret.Name+"-restorecopy-0", ns2.Name))
 		assert.NilError(t, checkConfigMap(configMap.Name+"-restorecopy-1", ns2.Name))
@@ -2652,7 +2651,7 @@ func TestCopyConfigurationResources(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		assert.NilError(t, r.copyConfigurationResources(ctx, nc, sc))
+		assert.NilError(t, r.copyConfigurationResources(ctx, nc, sc, ns1.Name))
 
 		assert.Check(t, apierrors.IsNotFound(checkSecret(secret.Name+"-restorecopy-0", ns2.Name)))
 		assert.NilError(t, checkConfigMap(configMap.Name+"-restorecopy-1", ns2.Name))
@@ -2673,7 +2672,7 @@ func TestCopyConfigurationResources(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		assert.NilError(t, r.copyConfigurationResources(ctx, nc, sc))
+		assert.NilError(t, r.copyConfigurationResources(ctx, nc, sc, ns1.Name))
 
 		assert.NilError(t, checkSecret(secret.Name+"-restorecopy-0", ns2.Name))
 		assert.Check(t, apierrors.IsNotFound(checkConfigMap(configMap.Name+"-restorecopy-1", ns2.Name)))
@@ -2690,7 +2689,7 @@ func TestCopyConfigurationResources(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		assert.NilError(t, r.copyConfigurationResources(ctx, nc, sc))
+		assert.NilError(t, r.copyConfigurationResources(ctx, nc, sc, ns1.Name))
 
 		assert.Assert(t, apierrors.IsNotFound(checkSecret(secret.Name+"-restorecopy-0", ns2.Name)))
 		assert.Assert(t, apierrors.IsNotFound(checkConfigMap(configMap.Name+"-restorecopy-1", ns2.Name)))

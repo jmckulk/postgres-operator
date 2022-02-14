@@ -102,16 +102,25 @@ func AddRepoVolumesToPod(postgresCluster *v1beta1.PostgresCluster, template *cor
 
 // AddConfigsToPod populates a Pod template Spec with with pgBackRest configuration volumes while
 // then mounting that configuration to the specified containers.
-func AddConfigsToPod(postgresCluster *v1beta1.PostgresCluster, template *corev1.PodTemplateSpec,
+func AddConfigsToPod(postgresCluster, sourceCluster *v1beta1.PostgresCluster, template *corev1.PodTemplateSpec,
 	configName string, containerNames ...string) error {
 
 	// grab user provided configs
 	pgBackRestConfigs := postgresCluster.Spec.Backups.PGBackRest.Configuration
+
+	// In most cases we want the name from the new cluster when setting the default
+	// configuration, but in cases where a restore is being performed from a source
+	// cluster, we use the source cluster name.
+	cmName := naming.PGBackRestConfig(postgresCluster).Name
+	if sourceCluster != nil {
+		cmName = naming.PGBackRestConfig(sourceCluster).Name
+	}
+
 	// add default pgbackrest configs
 	defaultConfig := corev1.VolumeProjection{
 		ConfigMap: &corev1.ConfigMapProjection{
 			LocalObjectReference: corev1.LocalObjectReference{
-				Name: naming.PGBackRestConfig(postgresCluster).Name,
+				Name: cmName,
 			},
 			Items: []corev1.KeyToPath{
 				{Key: configName, Path: configName},
@@ -130,7 +139,7 @@ func AddConfigsToPod(postgresCluster *v1beta1.PostgresCluster, template *corev1.
 	// For a PostgresCluster restore, append all pgBackRest configuration from
 	// the source cluster for the restore
 	if sourceCluster != nil {
-		sources = append(pgBackRestConfigs, sourceCluster.Spec.Backups.PGBackRest.Configuration...)
+		pgBackRestConfigs = append(pgBackRestConfigs, sourceCluster.Spec.Backups.PGBackRest.Configuration...)
 	}
 
 	template.Spec.Volumes = append(template.Spec.Volumes, corev1.Volume{

@@ -589,7 +589,7 @@ func (r *Reconciler) generateRepoHostIntent(postgresCluster *v1beta1.PostgresClu
 		return nil, errors.WithStack(err)
 	}
 	// add configs to pod
-	if err := pgbackrest.AddConfigsToPod(postgresCluster, &repo.Spec.Template,
+	if err := pgbackrest.AddConfigsToPod(postgresCluster, nil, &repo.Spec.Template,
 		pgbackrest.CMRepoKey, naming.PGBackRestRepoContainerName); err != nil {
 		return nil, errors.WithStack(err)
 	}
@@ -719,7 +719,7 @@ func generateBackupJobSpecIntent(postgresCluster *v1beta1.PostgresCluster, selec
 	jobSpec.Template.Spec.ImagePullSecrets = postgresCluster.Spec.ImagePullSecrets
 
 	// add pgBackRest configs to template
-	if err := pgbackrest.AddConfigsToPod(postgresCluster, &jobSpec.Template,
+	if err := pgbackrest.AddConfigsToPod(postgresCluster, nil, &jobSpec.Template,
 		configName, naming.PGBackRestRepoContainerName); err != nil {
 		return nil, errors.WithStack(err)
 	}
@@ -1109,18 +1109,10 @@ func (r *Reconciler) reconcileRestoreJob(ctx context.Context,
 	}
 
 	// add pgBackRest configs to template
-	if sourceCluster != nil {
-		if err := pgbackrest.AddConfigsToPod(sourceCluster, &restoreJob.Spec.Template,
-			pgbackrest.CMInstanceKey, naming.PGBackRestRestoreContainerName); err != nil {
-			return errors.WithStack(err)
-		}
-	} else {
-		if err := pgbackrest.AddConfigsToPod(cluster, &restoreJob.Spec.Template,
-			pgbackrest.CMInstanceKey, naming.PGBackRestRestoreContainerName); err != nil {
-			return errors.WithStack(err)
-		}
+	if err := pgbackrest.AddConfigsToPod(cluster, sourceCluster, &restoreJob.Spec.Template,
+		pgbackrest.CMInstanceKey, naming.PGBackRestRestoreContainerName); err != nil {
+		return errors.WithStack(err)
 	}
-	pgbackrest.AddConfigToRestorePod(cluster, sourceCluster, &restoreJob.Spec.Template.Spec)
 
 	// add nss_wrapper init container and add nss_wrapper env vars to the pgbackrest restore
 	// container
@@ -1694,11 +1686,11 @@ func (r *Reconciler) copyRestoreConfiguration(ctx context.Context,
 	}
 
 	// copy any needed projected Secrets or ConfigMaps
-	if err == nil {
-		err = r.copyConfigurationResources(ctx, cluster, sourceCluster)
+	if err := r.copyConfigurationResources(ctx, cluster, sourceCluster, origSourceCluster.Namespace); err != nil {
+		return errors.WithStack(err)
 	}
 
-	return err
+	return nil
 }
 
 // copyConfigurationResources copies all pgBackRest configuration ConfigMaps and
@@ -1707,7 +1699,7 @@ func (r *Reconciler) copyRestoreConfiguration(ctx context.Context,
 // VolumeProjections by the source cluster can be used by the new cluster during
 // bootstrapping.
 func (r *Reconciler) copyConfigurationResources(ctx context.Context, cluster,
-	sourceCluster *v1beta1.PostgresCluster) error {
+	sourceCluster *v1beta1.PostgresCluster, sourceNamespace string) error {
 
 	for i := range sourceCluster.Spec.Backups.PGBackRest.Configuration {
 		// While all volume projections from .Configuration will be carried over to
@@ -1720,7 +1712,7 @@ func (r *Reconciler) copyConfigurationResources(ctx context.Context, cluster,
 			secretCopy := &corev1.Secret{}
 			secretName := types.NamespacedName{
 				Name:      secretProjection.Name,
-				Namespace: sourceCluster.Namespace,
+				Namespace: sourceNamespace,
 			}
 			// Get the existing Secret for the copy, if it exists. It **must**
 			// exist if not configured as optional.
@@ -1774,7 +1766,7 @@ func (r *Reconciler) copyConfigurationResources(ctx context.Context, cluster,
 			configMapCopy := &corev1.ConfigMap{}
 			configMapName := types.NamespacedName{
 				Name:      configMapProjection.Name,
-				Namespace: sourceCluster.Namespace,
+				Namespace: sourceNamespace,
 			}
 			// Get the existing ConfigMap for the copy, if it exists. It **must**
 			// exist if not configured as optional.
