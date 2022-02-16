@@ -590,7 +590,7 @@ func (r *Reconciler) generateRepoHostIntent(postgresCluster *v1beta1.PostgresClu
 	}
 	// add configs to pod
 	if err := pgbackrest.AddConfigsToPod(postgresCluster, nil, &repo.Spec.Template,
-		pgbackrest.CMRepoKey, naming.PGBackRestRepoContainerName); err != nil {
+		pgbackrest.CMRepoKey, false, naming.PGBackRestRepoContainerName); err != nil {
 		return nil, errors.WithStack(err)
 	}
 
@@ -720,7 +720,7 @@ func generateBackupJobSpecIntent(postgresCluster *v1beta1.PostgresCluster, selec
 
 	// add pgBackRest configs to template
 	if err := pgbackrest.AddConfigsToPod(postgresCluster, nil, &jobSpec.Template,
-		configName, naming.PGBackRestRepoContainerName); err != nil {
+		configName, false, naming.PGBackRestRepoContainerName); err != nil {
 		return nil, errors.WithStack(err)
 	}
 
@@ -1108,9 +1108,13 @@ func (r *Reconciler) reconcileRestoreJob(ctx context.Context,
 		}
 	}
 
+	cloudBasedDataSourceRestore := false
+	if sourceCluster == nil {
+		cloudBasedDataSourceRestore = true
+	}
 	// add pgBackRest configs to template
 	if err := pgbackrest.AddConfigsToPod(cluster, sourceCluster, &restoreJob.Spec.Template,
-		pgbackrest.CMInstanceKey, naming.PGBackRestRestoreContainerName); err != nil {
+		pgbackrest.CMInstanceKey, cloudBasedDataSourceRestore, naming.PGBackRestRestoreContainerName); err != nil {
 		return errors.WithStack(err)
 	}
 

@@ -1240,7 +1240,7 @@ func addPGBackRestToInstancePodSpec(cluster *v1beta1.PostgresCluster,
 		}
 	}
 	if err := pgbackrest.AddConfigsToPod(cluster, nil, template, pgbackrest.CMInstanceKey,
-		pgBackRestConfigContainers...); err != nil {
+		false, pgBackRestConfigContainers...); err != nil {
 		return errors.WithStack(err)
 	}
 

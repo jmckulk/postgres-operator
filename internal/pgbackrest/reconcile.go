@@ -103,7 +103,7 @@ func AddRepoVolumesToPod(postgresCluster *v1beta1.PostgresCluster, template *cor
 // AddConfigsToPod populates a Pod template Spec with with pgBackRest configuration volumes while
 // then mounting that configuration to the specified containers.
 func AddConfigsToPod(postgresCluster, sourceCluster *v1beta1.PostgresCluster, template *corev1.PodTemplateSpec,
-	configName string, containerNames ...string) error {
+	configName string, cloudBasedDataSourceRestore bool, containerNames ...string) error {
 
 	// grab user provided configs
 	pgBackRestConfigs := postgresCluster.Spec.Backups.PGBackRest.Configuration
@@ -130,7 +130,10 @@ func AddConfigsToPod(postgresCluster, sourceCluster *v1beta1.PostgresCluster, te
 	}
 
 	pgBackRestConfigs = append(pgBackRestConfigs, defaultConfig)
-	if postgresCluster.Spec.DataSource != nil &&
+
+	// For a cloud-based datasource restore, append all pgBackRest configuration from
+	// the datasource, but only in the restore pod
+	if cloudBasedDataSourceRestore && postgresCluster.Spec.DataSource != nil &&
 		postgresCluster.Spec.DataSource.PGBackRest != nil &&
 		postgresCluster.Spec.DataSource.PGBackRest.Configuration != nil {
 		pgBackRestConfigs = append(pgBackRestConfigs, postgresCluster.Spec.DataSource.PGBackRest.Configuration...)

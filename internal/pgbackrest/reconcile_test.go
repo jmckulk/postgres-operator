@@ -198,6 +198,7 @@ func TestAddConfigsToPod(t *testing.T) {
 	testCases := []struct {
 		configs           []corev1.VolumeProjection
 		datasourceConfigs []corev1.VolumeProjection
+		restore           bool
 		containers        []corev1.Container
 		sourceCluster     *v1beta1.PostgresCluster
 	}{{
@@ -207,6 +208,7 @@ func TestAddConfigsToPod(t *testing.T) {
 			{Secret: &corev1.SecretProjection{
 				LocalObjectReference: corev1.LocalObjectReference{Name: "cust-secret.conf"}}}},
 		datasourceConfigs: []corev1.VolumeProjection{},
+		restore:           false,
 		containers:        []corev1.Container{{Name: "database"}, {Name: "pgbackrest"}},
 		sourceCluster:     &v1beta1.PostgresCluster{ObjectMeta: metav1.ObjectMeta{Name: "emptysource"}},
 	}, {
@@ -216,11 +218,19 @@ func TestAddConfigsToPod(t *testing.T) {
 			{Secret: &corev1.SecretProjection{
 				LocalObjectReference: corev1.LocalObjectReference{Name: "cust-secret.conf"}}}},
 		datasourceConfigs: []corev1.VolumeProjection{},
+		restore:           false,
 		containers:        []corev1.Container{{Name: "pgbackrest"}},
 		sourceCluster:     nil,
 	}, {
 		configs:           []corev1.VolumeProjection{},
 		datasourceConfigs: []corev1.VolumeProjection{},
+		restore:           false,
+		containers:        []corev1.Container{{Name: "database"}, {Name: "pgbackrest"}},
+		sourceCluster:     sourceClusterWithSecret,
+	}, {
+		configs:           []corev1.VolumeProjection{},
+		datasourceConfigs: []corev1.VolumeProjection{},
+		restore:           true,
 		containers:        []corev1.Container{{Name: "database"}, {Name: "pgbackrest"}},
 		sourceCluster:     sourceClusterWithSecret,
 	}, {
@@ -230,17 +240,40 @@ func TestAddConfigsToPod(t *testing.T) {
 				LocalObjectReference: corev1.LocalObjectReference{Name: "datasource-config.conf"}}},
 			{Secret: &corev1.SecretProjection{
 				LocalObjectReference: corev1.LocalObjectReference{Name: "datasource-secret.conf"}}}},
+		restore:       false,
 		containers:    []corev1.Container{{Name: "database"}, {Name: "pgbackrest"}},
 		sourceCluster: sourceClusterWithBoth,
 	}, {
+		configs: []corev1.VolumeProjection{},
+		datasourceConfigs: []corev1.VolumeProjection{
+			{ConfigMap: &corev1.ConfigMapProjection{
+				LocalObjectReference: corev1.LocalObjectReference{Name: "datasource-config.conf"}}},
+			{Secret: &corev1.SecretProjection{
+				LocalObjectReference: corev1.LocalObjectReference{Name: "datasource-secret.conf"}}}},
+		restore:       true,
+		containers:    []corev1.Container{{Name: "database"}, {Name: "pgbackrest"}},
+		sourceCluster: sourceClusterWithBoth,
+	}, {
+		configs: []corev1.VolumeProjection{},
+		datasourceConfigs: []corev1.VolumeProjection{
+			{ConfigMap: &corev1.ConfigMapProjection{
+				LocalObjectReference: corev1.LocalObjectReference{Name: "datasource-config.conf"}}},
+			{Secret: &corev1.SecretProjection{
+				LocalObjectReference: corev1.LocalObjectReference{Name: "datasource-secret.conf"}}}},
+		restore:       true,
+		containers:    []corev1.Container{{Name: "database"}, {Name: "pgbackrest"}},
+		sourceCluster: nil,
+	}, {
 		configs:           []corev1.VolumeProjection{},
 		datasourceConfigs: []corev1.VolumeProjection{},
+		restore:           false,
 		containers:        []corev1.Container{{Name: "pgbackrest"}},
 		sourceCluster:     sourceClusterWithCM,
 	}}
 
 	for _, tc := range testCases {
-		t.Run(fmt.Sprintf("configs=%d, containers=%d", len(tc.configs), len(tc.containers)), func(t *testing.T) {
+		t.Run(fmt.Sprintf("configs=%d, containers=%d, restore=%t",
+			len(tc.configs), len(tc.containers), tc.restore), func(t *testing.T) {
 			postgresCluster.Spec.Backups.PGBackRest.Configuration = tc.configs
 			if len(tc.datasourceConfigs) > 0 {
 				postgresCluster.Spec.DataSource = &v1beta1.DataSource{
@@ -256,7 +289,7 @@ func TestAddConfigsToPod(t *testing.T) {
 			}
 
 			err := AddConfigsToPod(postgresCluster, tc.sourceCluster, template, CMInstanceKey,
-				getContainerNames(tc.containers)...)
+				tc.restore, getContainerNames(tc.containers)...)
 			assert.NilError(t, err)
 
 			// check that the backrest config volume exists
@@ -290,9 +323,13 @@ func TestAddConfigsToPod(t *testing.T) {
 			}
 
 			// verify custom configs are present in the backrest config volume
-			configs := append(tc.configs, tc.datasourceConfigs...)
+			// datasourceConfigs should only be present if tc.restore == true
+			configs := append([]corev1.VolumeProjection{}, tc.configs...)
 			if tc.sourceCluster != nil {
 				configs = append(configs, tc.sourceCluster.Spec.Backups.PGBackRest.Configuration...)
+			}
+			if tc.sourceCluster == nil && tc.restore {
+				configs = append(configs, tc.datasourceConfigs...)
 			}
 			for _, c := range configs {
 				var foundCustomConfig bool
