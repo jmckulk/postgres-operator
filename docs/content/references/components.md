@@ -87,10 +87,10 @@ The [developer portal](https://www.crunchydata.com/developers/download-postgres/
 
 PostGIS enabled containers have both the Postgres and PostGIS software versions included. For example, Postgres 14 with Postgis 3.1 would use the following tags:
 
-- `{{< param postgres14GIS3.1ComponentTagUbi8 >}}`
-- `{{< param postgres14GIS3.1TagUbi8 >}}`
-- `{{< param postgres14GIS3.1ComponentTagCentos8 >}}`
-- `{{< param postgres14GIS3.1TagCentos8 >}}`
+- `{{< param postgres14GIS31ComponentTagUbi8 >}}`
+- `{{< param postgres14GIS31TagUbi8 >}}`
+- `{{< param postgres14GIS31ComponentTagCentos8 >}}`
+- `{{< param postgres14GIS31TagCentos8 >}}`
 
 ## Extensions Compatibility
 
