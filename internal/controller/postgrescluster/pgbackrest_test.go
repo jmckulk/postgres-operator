@@ -171,6 +171,14 @@ func fakePostgresCluster(clusterName, namespace, clusterUID string,
 	return postgresCluster
 }
 
+func fakeObservedCronJobs() []*batchv1beta1.CronJob {
+	return []*batchv1beta1.CronJob{
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "fake-cronjob",
+			}}}
+}
+
 func TestReconcilePGBackRest(t *testing.T) {
 	// Garbage collector cleans up test resources before the test completes
 	if strings.EqualFold(os.Getenv("USE_EXISTING_CLUSTER"), "true") {
@@ -555,19 +563,19 @@ func TestReconcilePGBackRest(t *testing.T) {
 				Type: condition, Reason: "testing", Status: status})
 		}
 
-		requeue := r.reconcileScheduledBackups(ctx, postgresCluster, serviceAccount)
+		requeue := r.reconcileScheduledBackups(ctx, postgresCluster, serviceAccount, fakeObservedCronJobs())
 		assert.Assert(t, !requeue)
 
 		returnedCronJob := &batchv1beta1.CronJob{}
 		if err := tClient.Get(ctx, types.NamespacedName{
-			Name:      postgresCluster.Name + "-pgbackrest-repo1-full",
+			Name:      postgresCluster.Name + "-repo1-full",
 			Namespace: postgresCluster.GetNamespace(),
 		}, returnedCronJob); err != nil {
 			assert.NilError(t, err)
 		}
 
 		// check returned cronjob matches set spec
-		assert.Equal(t, returnedCronJob.Name, "hippocluster-pgbackrest-repo1-full")
+		assert.Equal(t, returnedCronJob.Name, "hippocluster-repo1-full")
 		assert.Equal(t, returnedCronJob.Spec.Schedule, testCronSchedule)
 		assert.Equal(t, returnedCronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Name,
 			"pgbackrest")
@@ -606,7 +614,7 @@ func TestReconcilePGBackRest(t *testing.T) {
 
 		returnedCronJob := &batchv1beta1.CronJob{}
 		if err := tClient.Get(ctx, types.NamespacedName{
-			Name:      postgresCluster.Name + "-pgbackrest-repo1-full",
+			Name:      postgresCluster.Name + "-repo1-full",
 			Namespace: postgresCluster.GetNamespace(),
 		}, returnedCronJob); err != nil {
 			assert.NilError(t, err)
@@ -621,11 +629,11 @@ func TestReconcilePGBackRest(t *testing.T) {
 			postgresCluster.Spec.Standby = nil
 
 			requeue := r.reconcileScheduledBackups(ctx,
-				postgresCluster, serviceAccount)
+				postgresCluster, serviceAccount, fakeObservedCronJobs())
 			assert.Assert(t, !requeue)
 
 			assert.NilError(t, tClient.Get(ctx, types.NamespacedName{
-				Name:      postgresCluster.Name + "-pgbackrest-repo1-full",
+				Name:      postgresCluster.Name + "-repo1-full",
 				Namespace: postgresCluster.GetNamespace(),
 			}, returnedCronJob))
 
@@ -639,11 +647,11 @@ func TestReconcilePGBackRest(t *testing.T) {
 			}
 
 			requeue := r.reconcileScheduledBackups(ctx,
-				postgresCluster, serviceAccount)
+				postgresCluster, serviceAccount, fakeObservedCronJobs())
 			assert.Assert(t, !requeue)
 
 			assert.NilError(t, tClient.Get(ctx, types.NamespacedName{
-				Name:      postgresCluster.Name + "-pgbackrest-repo1-full",
+				Name:      postgresCluster.Name + "-repo1-full",
 				Namespace: postgresCluster.GetNamespace(),
 			}, returnedCronJob))
 
@@ -3513,6 +3521,8 @@ func TestReconcileScheduledBackups(t *testing.T) {
 		expectedEventReason string
 		// the observed instances
 		instances *observedInstances
+		// CronJobs exist
+		cronJobs bool
 	}{
 		{
 			testDesc: "should reconcile, no requeue",
@@ -3527,6 +3537,20 @@ func TestReconcileScheduledBackups(t *testing.T) {
 			},
 			expectReconcile: true,
 			expectRequeue:   false,
+		}, {
+			testDesc: "should reconcile, no requeue, existing cronjob",
+			clusterConditions: map[string]metav1.ConditionStatus{
+				ConditionRepoHostReady: metav1.ConditionTrue,
+				ConditionReplicaCreate: metav1.ConditionTrue,
+			},
+			status: &v1beta1.PostgresClusterStatus{
+				Patroni: &v1beta1.PatroniStatus{SystemIdentifier: "12345abcde"},
+				PGBackRest: &v1beta1.PGBackRestStatus{
+					Repos: []v1beta1.RepoStatus{{Name: "repo1", StanzaCreated: true}}},
+			},
+			expectReconcile: true,
+			expectRequeue:   false,
+			cronJobs:        true,
 		}, {
 			testDesc: "cluster not bootstrapped, should not reconcile",
 			status: &v1beta1.PostgresClusterStatus{
@@ -3618,12 +3642,38 @@ func TestReconcileScheduledBackups(t *testing.T) {
 				assert.NilError(t, tClient.Status().Update(ctx, postgresCluster))
 
 				var requeue bool
-				if tc.instances != nil {
-					requeue = r.reconcileScheduledBackups(ctx, postgresCluster, sa)
+				if tc.cronJobs {
+					existingCronJobs := []*batchv1beta1.CronJob{
+						{
+							ObjectMeta: metav1.ObjectMeta{
+								Name: "existingcronjob-repo1-full",
+								Labels: map[string]string{
+									naming.LabelCluster:           clusterName,
+									naming.LabelPGBackRestCronJob: "full",
+									naming.LabelPGBackRestRepo:    "repo1",
+								}},
+						}, {
+							ObjectMeta: metav1.ObjectMeta{
+								Name: "existingcronjob-repo1-incr",
+								Labels: map[string]string{
+									naming.LabelCluster:           clusterName,
+									naming.LabelPGBackRestCronJob: "incr",
+									naming.LabelPGBackRestRepo:    "repo1",
+								}},
+						}, {
+							ObjectMeta: metav1.ObjectMeta{
+								Name: "existingcronjob-repo1-diff",
+								Labels: map[string]string{
+									naming.LabelCluster:           clusterName,
+									naming.LabelPGBackRestCronJob: "diff",
+									naming.LabelPGBackRestRepo:    "repo1",
+								}},
+						},
+					}
+					requeue = r.reconcileScheduledBackups(ctx, postgresCluster, sa, existingCronJobs)
 				} else {
-					requeue = r.reconcileScheduledBackups(ctx, postgresCluster, sa)
+					requeue = r.reconcileScheduledBackups(ctx, postgresCluster, sa, fakeObservedCronJobs())
 				}
-
 				if !tc.expectReconcile && !tc.expectRequeue {
 					// expect no reconcile, no requeue
 					assert.Assert(t, !requeue)
@@ -3661,16 +3711,23 @@ func TestReconcileScheduledBackups(t *testing.T) {
 
 					for _, backupType := range backupTypes {
 
+						var cronJobName string
+						if tc.cronJobs {
+							cronJobName = "existingcronjob-repo1-" + backupType
+						} else {
+							cronJobName = postgresCluster.Name + "-repo1-" + backupType
+						}
+
 						returnedCronJob := &batchv1beta1.CronJob{}
 						if err := tClient.Get(ctx, types.NamespacedName{
-							Name:      postgresCluster.Name + "-pgbackrest-repo1-" + backupType,
+							Name:      cronJobName,
 							Namespace: postgresCluster.GetNamespace(),
 						}, returnedCronJob); err != nil {
 							assert.NilError(t, err)
 						}
 
 						// check returned cronjob matches set spec
-						assert.Equal(t, returnedCronJob.Name, clusterName+"-pgbackrest-repo1-"+backupType)
+						assert.Equal(t, returnedCronJob.Name, cronJobName)
 						assert.Equal(t, returnedCronJob.Spec.Schedule, testCronSchedule)
 						assert.Equal(t, returnedCronJob.Spec.JobTemplate.Spec.Template.Spec.PriorityClassName, "some-priority-class")
 						assert.Equal(t, returnedCronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Name,
