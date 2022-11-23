@@ -118,7 +118,7 @@ undeploy:
 
 #======= Binary builds =======
 build-postgres-operator:
-	$(GO_BUILD) -ldflags '-X "main.versionString=$(PGO_VERSION)"' \
+	CGO_ENABLED=0 $(GO_BUILD) -ldflags '-X "main.versionString=$(PGO_VERSION)"' \
 		-o bin/postgres-operator ./cmd/postgres-operator
 
 build-pgo-%:
