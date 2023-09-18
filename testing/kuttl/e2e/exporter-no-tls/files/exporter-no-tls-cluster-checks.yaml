@@ -1,8 +1,7 @@
----
 apiVersion: postgres-operator.crunchydata.com/v1beta1
 kind: PostgresCluster
 metadata:
-  name: exporter-custom-queries
+  name: exporter-no-tls
 status:
   instances:
     - name: instance1
@@ -11,11 +10,15 @@ status:
       updatedReplicas: 1
 ---
 apiVersion: v1
-kind: ConfigMap
+kind: Pod
 metadata:
-  name: exporter-custom-queries-exporter-queries-config
+  labels:
+    postgres-operator.crunchydata.com/cluster: exporter-no-tls
+    postgres-operator.crunchydata.com/crunchy-postgres-exporter: "true"
+status:
+  phase: Running
 ---
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: custom-queries-test
+  name: exporter-no-tls-exporter-queries-config
