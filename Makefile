@@ -6,7 +6,7 @@ PGO_IMAGE_URL ?= https://www.crunchydata.com/products/crunchy-postgresql-for-kub
 PGO_IMAGE_PREFIX ?= localhost
 
 PGMONITOR_DIR ?= hack/tools/pgmonitor
-PGMONITOR_VERSION ?= v4.8.1
+PGMONITOR_VERSION ?= v4.9.0
 QUERIES_CONFIG_DIR ?= hack/tools/queries
 
 # Buildah's "build" used to be "bud". Use the alias to be compatible for a while.

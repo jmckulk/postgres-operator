@@ -60,7 +60,7 @@ var DefaultValuesForQueries = map[string]string{
 func GenerateDefaultExporterQueries(ctx context.Context, cluster *v1beta1.PostgresCluster) string {
 	log := logging.FromContext(ctx)
 	var queries string
-	baseQueries := []string{"backrest", "global", "per_db", "nodemx"}
+	baseQueries := []string{"backrest", "global", "global_dbsize", "per_db", "nodemx"}
 	queriesConfigDir := GetQueriesConfigDir(ctx)
 
 	// TODO: When we add pgbouncer support we will do something like the following:
